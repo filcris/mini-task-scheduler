@@ -1,0 +1,18 @@
+# Backend ignore
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+prisma/dev.db
+prisma/*.sqlite
+*.log
+# TypeScript cache
+*.tsbuildinfo
+# IDE
+.idea/
+.vscode/
+.DS_Store
+# Tests
+junit.xml
+lcov.info

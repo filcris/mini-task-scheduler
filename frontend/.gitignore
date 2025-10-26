@@ -1,0 +1,16 @@
+# Frontend ignore
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+*.log
+.idea/
+.vscode/
+.DS_Store
+# Vite/React caches
+*.tsbuildinfo
+.next/
+.out/
+.cache/

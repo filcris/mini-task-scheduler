@@ -1,0 +1,69 @@
+services:
+  db:
+    image: postgres:15
+    container_name: mts-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mts
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mts-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mts-backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/mts
+      PORT: 4000
+      FRONTEND_URL: http://localhost:5173
+      JWT_SECRET: devsecret_change_me
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: postgres
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - mts-network
+    # ⚠ Em produção NÃO montar o código para não sobrepor /dist e /node_modules
+    # volumes:
+    #   - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mts-frontend
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    ports:
+      - "5173:5173"
+    networks:
+      - mts-network
+    # Para dev com hot-reload, podes montar o código do frontend:
+    # volumes:
+    #   - ./frontend:/app
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+
+networks:
+  mts-network:
+    driver: bridge

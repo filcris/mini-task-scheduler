@@ -1,0 +1,1 @@
+Compose v10 com healthcheck do Postgres e backend aguarda DB saudável.
