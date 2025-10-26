@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { Module } from '@nestjs/common';
+
+import { PrismaModule } from '../prisma/prisma.module';
 import { TasksOverdueProcessor } from './tasks-overdue.processor';
 import { TasksOverdueService } from './tasks-overdue.service';
-import { PrismaModule } from '../prisma/prisma.module';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 

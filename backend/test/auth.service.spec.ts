@@ -1,8 +1,9 @@
 // test/auth.service.spec.ts
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+
 import { AuthService } from '../src/auth/auth.service';
 import { UsersService } from '../src/users/users.service';
-import { JwtService } from '@nestjs/jwt';
 
 // Mock do bcrypt para não depender de hashing real nos testes
 jest.mock('bcrypt', () => ({

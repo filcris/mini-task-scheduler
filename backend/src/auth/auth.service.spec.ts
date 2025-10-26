@@ -1,8 +1,9 @@
 // src/auth/auth.service.spec.ts
-import { Test } from '@nestjs/testing';
-import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
+import { Test } from '@nestjs/testing';
+
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from './auth.service';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(async () => 'hashed_pw'),

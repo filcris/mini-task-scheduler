@@ -1,20 +1,33 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
-import { ReportsService } from './reports.service';
+import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ReportsService } from './reports.service';
+
+interface JwtPayload {
+  sub: string;
+  email: string;
+}
+
+export interface ReportsSummaryDto {
+  total: number;
+  todo: number;
+  doing: number;
+  done: number;
+  overdue: number;
+}
 
 @ApiTags('reports')
-@ApiBearerAuth('bearer')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api/reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get('summary')
-  @ApiOperation({ summary: 'Resumo de tarefas do utilizador' })
-  @ApiOkResponse({ description: 'Resumo por estado e atrasadas' })
-  summary(@Req() req: any) {
-    const userId: string = req.user.sub;
-    return this.reports.summary(userId);
+  @ApiOkResponse({ description: 'Summary counters' })
+  async summary(@Req() req: { user: JwtPayload }): Promise<ReportsSummaryDto> {
+    return this.reports.summary(req.user.sub);
   }
 }
+

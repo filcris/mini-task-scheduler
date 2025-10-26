@@ -1,65 +1,66 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
+  Patch,
+  Post,
   Query,
-  UseGuards,
   Req,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TasksService } from './tasks.service';
-import { QueryTasksDto } from './dto/query-tasks.dto';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
-// Helper robusto para extrair o ID do utilizador do token (req.user)
-function getUserId(req: any): string {
-  const id = req?.user?.sub ?? req?.user?.id ?? req?.user?.userId;
-  if (!id) throw new UnauthorizedException('Missing user id in token');
-  return id;
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CreateTaskDto } from './dto/create-task.dto';
+import { QueryTasksDto } from './dto/query-tasks.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
+import { TasksService } from './tasks.service';
+
+interface JwtPayload {
+  sub: string;
+  email: string;
 }
 
-@UseGuards(JwtAuthGuard) // protege todas as rotas deste controller
-@Controller('tasks')     // prefixo global 'api' -> rotas finais /api/tasks
+@ApiTags('tasks')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('api/tasks')
 export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
   @Get()
-  list(@Req() req, @Query() q: QueryTasksDto) {
-    return this.tasks.findAll(getUserId(req), q);
+  async list(
+    @Req() req: { user: JwtPayload },
+    @Query() query: QueryTasksDto,
+  ) {
+    return this.tasks.findAll(req.user.sub, query);
   }
 
   @Post()
-  create(
-    @Req() req,
-    @Body()
-    body: {
-      title: string;
-      priority?: 'low' | 'medium' | 'high';
-      dueAt?: string;
-    },
+  async create(
+    @Req() req: { user: JwtPayload },
+    @Body() dto: CreateTaskDto,
   ) {
-    const dueAt = body.dueAt ? new Date(body.dueAt) : undefined;
-    return this.tasks.create(getUserId(req), {
-      title: body.title,
-      priority: body.priority ?? 'medium',
-      dueAt,
-    });
+    return this.tasks.create(req.user.sub, dto);
   }
 
   @Patch(':id')
-  update(@Req() req, @Param('id') id: string, @Body() body: any) {
-    return this.tasks.update(getUserId(req), id, body);
+  async update(
+    @Req() req: { user: JwtPayload },
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+  ) {
+    return this.tasks.update(req.user.sub, id, dto);
   }
 
   @Delete(':id')
-  remove(@Req() req, @Param('id') id: string) {
-    return this.tasks.remove(getUserId(req), id);
+  async remove(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
+    return this.tasks.remove(req.user.sub, id);
   }
 }
+
 
 
 

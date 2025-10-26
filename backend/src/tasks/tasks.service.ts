@@ -1,64 +1,63 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateTaskDto } from './dto/create-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
 
 @Injectable()
 export class TasksService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(userId: string, q: QueryTasksDto) {
-    const page  = Math.max(1, q.page ?? 1);
-    const take  = Math.min(50, Math.max(1, q.limit ?? 10));
-    const skip  = (page - 1) * take;
+  async findAll(userId: string, query: QueryTasksDto) {
+    const where: Prisma.TaskWhereInput = {
+      ownerId: userId,
+      status: query.status,
+      priority: query.priority,
+      title: query.search
+        ? { contains: query.search, mode: 'insensitive' }
+        : undefined,
+      dueAt:
+        query.dueFrom || query.dueTo
+          ? {
+              gte: query.dueFrom ? new Date(query.dueFrom) : undefined,
+              lte: query.dueTo ? new Date(query.dueTo) : undefined,
+            }
+          : undefined,
+    };
 
-    const where: any = { ownerId: userId };
-    if (q.status)   where.status   = q.status;
-    if (q.priority) where.priority = q.priority;
-    if (q.overdue === 'true') {
-      where.AND = [
-        ...(where.AND ?? []),
-        { status: { not: 'done' } },
-        { dueAt:  { lt: new Date() } },
-      ];
-    }
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
 
-    const [total, data] = await this.prisma.$transaction([
-      this.prisma.task.count({ where }),
+    const [data, total] = await Promise.all([
       this.prisma.task.findMany({
-        where, skip, take,
+        where,
         orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
       }),
+      this.prisma.task.count({ where }),
     ]);
 
     return {
       data,
-      meta: { page, limit: take, total, pages: Math.max(1, Math.ceil(total / take)) },
+      meta: { page, pageSize, total },
     };
   }
 
-  async create(
-    userId: string,
-    payload: { title: string; priority?: 'low'|'medium'|'high'; dueAt?: Date; description?: string }
-  ) {
+  async create(userId: string, dto: CreateTaskDto) {
     return this.prisma.task.create({
-      data: {
-        title: payload.title,
-        priority: payload.priority ?? 'medium',
-        dueAt: payload.dueAt ?? null,
-        description: payload.description ?? null,
-        ownerId: userId,
-      },
+      data: { ...dto, ownerId: userId },
     });
   }
 
-  async update(userId: string, id: string, data: any) {
-    // só atualiza se pertencer ao utilizador
+  async update(userId: string, id: string, dto: UpdateTaskDto) {
     const res = await this.prisma.task.updateMany({
       where: { id, ownerId: userId },
-      data,
+      data: dto,
     });
     if (res.count === 0) throw new NotFoundException('Task not found');
-
     return this.prisma.task.findUnique({ where: { id } });
   }
 
@@ -70,6 +69,7 @@ export class TasksService {
     return { ok: true };
   }
 }
+
 
 
 

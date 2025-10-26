@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
-import { TasksService } from 'src/tasks/tasks.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { TasksService } from 'src/tasks/tasks.service';
+
 import { MockPrismaService } from './__mocks__/prisma.service';
 
 describe('TasksService', () => {

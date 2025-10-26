@@ -1,5 +1,6 @@
-import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { OnWorkerEvent,Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
+
 import { PrismaService } from '../prisma/prisma.service';
 
 @Processor('tasks')

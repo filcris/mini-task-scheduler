@@ -1,5 +1,5 @@
-import { IsInt, IsOptional, IsIn, IsBooleanString } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { IsBooleanString,IsIn, IsInt, IsOptional } from 'class-validator';
 
 export class QueryTasksDto {
   @Transform(({ value }) => parseInt(value, 10))

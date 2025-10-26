@@ -1,8 +1,8 @@
+import { ExecutionContext } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { TasksController } from 'src/tasks/tasks.controller';
 import { TasksService } from 'src/tasks/tasks.service';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { ExecutionContext } from '@nestjs/common';
 
 class MockGuard implements Partial<JwtAuthGuard> {
   canActivate(ctx: ExecutionContext) {
