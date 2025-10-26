@@ -1,107 +1,62 @@
-import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { UsersService } from '../users/users.service';
+
+type SignPayload = { sub: string; email: string };
+type SignResult = { token: string; access_token: string; id: string; email: string };
+type PublicUser = { id: string; email: string };
 
 @Injectable()
 export class AuthService {
   constructor(
-    @Optional() private readonly prisma?: PrismaService,
-    @Optional() private readonly users?: UsersService,
-    @Optional() private readonly jwt?: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
   ) {}
 
-  // ---------------- Helpers ----------------
-
-  private async findUserByEmail(email: string) {
-    if (this.users?.findByEmail) {
-      return this.users.findByEmail(email);
-    }
-    if (this.prisma?.user) {
-      return this.prisma.user.findUnique({
-        where: { email },
-        select: { id: true, email: true, passwordHash: true },
-      });
-    }
-    return undefined;
+  private async signToken(sub: string, email: string): Promise<SignResult> {
+    const payload: SignPayload = { sub, email };
+    const opts: JwtSignOptions = {}; // podes ajustar expirações aqui
+    const token = await this.jwt.signAsync(payload, opts);
+    return { token, access_token: token, id: sub, email };
   }
 
-  private async createUser(email: string, passwordHash: string, name?: string) {
-    if (this.users?.create) {
-      // Cast para evitar erro de tipos e permitir decidir em runtime
-      const createAny: any = this.users.create as unknown as any;
+  async register(email: string, password: string, name?: string | null): Promise<SignResult & PublicUser> {
+    try {
+      const exists = await this.prisma.user.findUnique({ where: { email } });
+      if (exists) throw new BadRequestException('Email já registado');
 
-      // Se a função tem aridade >=2, assumimos assinatura posicional (runtime real)
-      if (typeof createAny === 'function' && createAny.length >= 2) {
-        return createAny(email, passwordHash, name);
-      }
-
-      // Caso contrário (mocks em testes), chamamos com objeto — o teste espera isto
-      return createAny({ email, passwordHash, name });
-    }
-
-    if (this.prisma?.user) {
-      return this.prisma.user.create({
-        data: { email, passwordHash },
+      const passwordHash = await bcrypt.hash(password, 10);
+      const created = await this.prisma.user.create({
+        data: { email, passwordHash, name: name ?? null },
         select: { id: true, email: true },
       });
-    }
 
-    throw new Error('No persistence provider available for AuthService');
+      const signed = await this.signToken(created.id, created.email);
+      return { ...signed, id: created.id, email: created.email };
+    } catch (err: unknown) {
+      if (err instanceof BadRequestException) throw err;
+      if (err instanceof Error) throw new BadRequestException(err.message);
+      throw new BadRequestException('Não foi possível registar');
+    }
   }
 
-  private async signToken(sub: string, email: string) {
-    const payload = { sub, email };
-
-    let token = 'fake.jwt.token'; // fallback para mocks incompletos
-    if (this.jwt) {
-      const anyJwt: any = this.jwt as any;
-      if (typeof anyJwt.signAsync === 'function') {
-        token = await anyJwt.signAsync(payload);
-      } else if (typeof anyJwt.sign === 'function') {
-        token = anyJwt.sign(payload);
-      }
-    }
-
-    // compat com testes: devolver também id e email + alias access_token
-    return { token, access_token: token, id: sub, email };
-    // -------------------------------------------------------------
-  }
-
-  // ---------------- API ----------------
-
-  async register(email: string, password: string, name?: string) {
-    const existing = await this.findUserByEmail(email);
-    if (existing) {
-      throw new UnauthorizedException('Email already in use');
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await this.createUser(email, passwordHash, name);
-    return this.signToken(user.id, user.email);
-  }
-
-  async login(email: string, password: string) {
-    const user = await this.findUserByEmail(email);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // garantir que temos hash para comparar
-    if (!('passwordHash' in user) || !user.passwordHash) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+  async login(email: string, password: string): Promise<{ access_token: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, passwordHash: true },
+    });
+    if (!user) throw new UnauthorizedException('Credenciais inválidas');
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    if (!ok) throw new UnauthorizedException('Credenciais inválidas');
 
-    return this.signToken(user.id, user.email);
+    const signed = await this.signToken(user.id, user.email);
+    return { access_token: signed.access_token };
   }
 }
+
 
 
 

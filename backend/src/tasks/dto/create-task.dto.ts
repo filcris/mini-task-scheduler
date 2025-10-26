@@ -1,35 +1,41 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { TaskPriority, TaskStatus } from '@prisma/client';
+import { Transform } from 'class-transformer';
+import { IsDate, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export type TaskStatus = 'todo' | 'doing' | 'done';
-export type TaskPriority = 'low' | 'medium' | 'high';
+type DateLike = string | number | Date | null | undefined;
 
 export class CreateTaskDto {
-  @ApiProperty()
+  @ApiProperty({ example: 'Comprar café' })
   @IsString()
-  @IsNotEmpty()
   @MaxLength(200)
   title!: string;
 
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional({ example: 'Pacote de 1kg moído' })
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
-  description?: string;
+  @MaxLength(2000)
+  description?: string | null;
 
-  @ApiProperty({ required: false, enum: ['todo', 'doing', 'done'] })
+  @ApiPropertyOptional({ enum: TaskStatus, example: TaskStatus.todo })
   @IsOptional()
-  @IsEnum(['todo', 'doing', 'done'] as any)
+  @IsEnum(TaskStatus)
   status?: TaskStatus;
 
-  @ApiProperty({ required: false, enum: ['low', 'medium', 'high'] })
+  @ApiPropertyOptional({ enum: TaskPriority, example: TaskPriority.medium })
   @IsOptional()
-  @IsEnum(['low', 'medium', 'high'] as any)
+  @IsEnum(TaskPriority)
   priority?: TaskPriority;
 
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional({ type: String, example: '2025-10-27T10:00:00.000Z' })
   @IsOptional()
-  @IsISO8601()
-  dueAt?: string | null;
+  @Transform(({ value }: { value: DateLike }) => {
+    if (value == null || value === '') return undefined;
+    const d = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  })
+  @IsDate()
+  dueAt?: Date | null;
 }
+
 
