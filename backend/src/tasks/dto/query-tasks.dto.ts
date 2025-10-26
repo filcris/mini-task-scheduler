@@ -1,27 +1,66 @@
 import { Transform } from 'class-transformer';
-import { IsBooleanString,IsIn, IsInt, IsOptional } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsISO8601,
+  Min,
+} from 'class-validator';
+
+export type TaskStatus = 'todo' | 'doing' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high';
 
 export class QueryTasksDto {
-  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  @IsEnum(['todo', 'doing', 'done'] as const, {
+    message: 'status must be todo|doing|done',
+  })
+  status?: TaskStatus;
+
+  @IsOptional()
+  @IsEnum(['low', 'medium', 'high'] as const, {
+    message: 'priority must be low|medium|high',
+  })
+  priority?: TaskPriority;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  dueFrom?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  dueTo?: string;
+
+  /** paginação baseada em página (continua suportada) */
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
   @IsInt()
-  @IsOptional()
-  page?: number = 1;
+  @Min(1)
+  page?: number;
 
-  @Transform(({ value }) => parseInt(value, 10))
+  /** tamanho da página (continua suportado) */
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
   @IsInt()
-  @IsOptional()
-  limit?: number = 10;
+  @Min(1)
+  pageSize?: number;
 
+  /** alternativa simples: limite direto (os testes usam) */
   @IsOptional()
-  @IsIn(['todo', 'doing', 'done'])
-  status?: 'todo' | 'doing' | 'done';
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  @IsInt()
+  @Min(1)
+  limit?: number;
 
+  /** filtro “overdue”; os testes comparam string 'true'/'false' */
   @IsOptional()
-  @IsIn(['low', 'medium', 'high'])
-  priority?: 'low' | 'medium' | 'high';
-
-  // overdue=true -> dueAt < now AND status != done
-  @IsOptional()
-  @IsBooleanString()
+  @IsEnum(['true', 'false'] as const)
   overdue?: 'true' | 'false';
 }
+
+

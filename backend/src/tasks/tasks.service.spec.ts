@@ -1,66 +1,95 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-
+import { Test, TestingModule } from '@nestjs/testing';
+import { TasksService } from './tasks.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { QueryTasksDto } from './dto/query-tasks.dto';
 
-@Injectable()
-export class TasksService {
-  constructor(private prisma: PrismaService) {}
+describe('TasksService (unit)', () => {
+  let service: TasksService;
 
-  async findAll(userId: string, q: QueryTasksDto) {
-    const page  = Math.max(1, q.page ?? 1);
-    const take  = Math.min(50, Math.max(1, q.limit ?? 10));
-    const skip  = (page - 1) * take;
+  // Mock muito simples do Prisma
+  const prismaMock = {
+    task: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      updateMany: jest.fn(),
+      findUnique: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+  } as unknown as PrismaService;
 
-    const where: any = { ownerId: userId };
-    if (q.status)   where.status   = q.status;
-    if (q.priority) where.priority = q.priority;
-    if (q.overdue === 'true') {
-      where.AND = [
-        ...(where.AND ?? []),
-        { status: { not: 'done' } },
-        { dueAt:  { lt: new Date() } },
-      ];
-    }
+  beforeEach(async () => {
+    jest.clearAllMocks();
 
-    const [total, data] = await this.prisma.$transaction([
-      this.prisma.task.count({ where }),
-      this.prisma.task.findMany({
-        where, skip, take,
-        orderBy: [{ createdAt: 'desc' }],
-      }),
-    ]);
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        TasksService,
+        { provide: PrismaService, useValue: prismaMock },
+      ],
+    }).compile();
 
-    return {
-      data,
-      meta: { page, limit: take, total, pages: Math.max(1, Math.ceil(total / take)) },
-    };
-  }
+    service = module.get<TasksService>(TasksService);
+  });
 
-  async create(userId: string, payload: { title: string; priority?: 'low'|'medium'|'high'; dueAt?: Date }) {
-    return this.prisma.task.create({
-      data: {
-        title: payload.title,
-        priority: payload.priority ?? 'medium',
-        dueAt: payload.dueAt,
-        ownerId: userId,
+  it('findAll: devolve { total, data, items, meta }', async () => {
+    // Arrange
+    (prismaMock.task.findMany as any).mockResolvedValue([
+      {
+        id: 't1',
+        title: 'Comprar café',
+        status: 'todo',
+        priority: 'medium',
+        dueAt: null,
+        description: null,
+        ownerId: 'u1',
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        updatedAt: new Date('2025-01-01T00:00:00Z'),
       },
-    });
-  }
+    ]);
+    (prismaMock.task.count as any).mockResolvedValue(1);
 
-  async update(userId: string, id: string, data: any) {
-    const res = await this.prisma.task.updateMany({
-      where: { id, ownerId: userId },
-      data,
-    });
-    if (res.count === 0) throw new NotFoundException('Task not found');
-    return this.prisma.task.findUnique({ where: { id } });
-  }
+    // Act
+    const res = await service.findAll('u1', { page: 1, pageSize: 10 });
 
-  async remove(userId: string, id: string) {
-    const res = await this.prisma.task.deleteMany({ where: { id, ownerId: userId } });
-    if (res.count === 0) throw new NotFoundException('Task not found');
-    return { ok: true };
-  }
-}
+    // Assert
+    expect(res.total).toBe(1);
+    expect(Array.isArray(res.data)).toBe(true);
+    expect(Array.isArray(res.items)).toBe(true);
+    expect(res.items.length).toBe(1);
+    expect(res.meta).toEqual({ page: 1, pageSize: 10, total: 1 });
+
+    // Confirma que findMany foi chamado com take/skip corretos
+    const args = (prismaMock.task.findMany as any).mock.calls[0][0];
+    expect(args.skip).toBe(0);
+    expect(args.take).toBe(10);
+    expect(args.where.ownerId).toBe('u1');
+  });
+
+  it('findAll: aplica filtro overdue (dueAt < now && status != done)', async () => {
+    // Arrange
+    (prismaMock.task.findMany as any).mockResolvedValue([]);
+    (prismaMock.task.count as any).mockResolvedValue(0);
+
+    // Act
+    await service.findAll('u1', { overdue: 'true', limit: 5 });
+
+    // Assert: examinar o "where" passado ao Prisma
+    const args = (prismaMock.task.findMany as any).mock.calls[0][0];
+    expect(args.take).toBe(5);
+    expect(args.skip).toBe(0);
+    expect(args.where.ownerId).toBe('u1');
+
+    // AND deve existir como array com 2 entradas: dueAt < now e status != done
+    expect(Array.isArray(args.where.AND)).toBe(true);
+    const andArr = args.where.AND as any[];
+
+    // status != 'done'
+    const statusCond = andArr.find((c) => c?.status?.not === 'done');
+    expect(statusCond).toBeDefined();
+
+    // dueAt < now — não verificamos a data exacta, só a presença de lt
+    const dueCond = andArr.find((c) => c?.dueAt?.lt instanceof Date);
+    expect(dueCond).toBeDefined();
+  });
+});
+
 

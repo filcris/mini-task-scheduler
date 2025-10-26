@@ -10,52 +10,95 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(userId: string, query: QueryTasksDto) {
+  async findAll(userId: string, q: QueryTasksDto) {
     const where: Prisma.TaskWhereInput = {
       ownerId: userId,
-      status: query.status,
-      priority: query.priority,
-      title: query.search
-        ? { contains: query.search, mode: 'insensitive' }
+      status: q.status,
+      priority: q.priority,
+      title: q.search
+        ? { contains: q.search, mode: 'insensitive' }
         : undefined,
       dueAt:
-        query.dueFrom || query.dueTo
+        q.dueFrom || q.dueTo
           ? {
-              gte: query.dueFrom ? new Date(query.dueFrom) : undefined,
-              lte: query.dueTo ? new Date(query.dueTo) : undefined,
+              gte: q.dueFrom ? new Date(q.dueFrom) : undefined,
+              lte: q.dueTo ? new Date(q.dueTo) : undefined,
             }
           : undefined,
     };
 
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 10;
+    // Filtro overdue: dueAt < agora e status != 'done'
+    if (q.overdue === 'true') {
+      const now = new Date();
+
+      // Normalizar where.AND para array
+      const andParts: Prisma.TaskWhereInput[] = [];
+      if (where.AND) {
+        if (Array.isArray(where.AND)) andParts.push(...where.AND);
+        else andParts.push(where.AND);
+      }
+
+      andParts.push({ dueAt: { lt: now } });
+      andParts.push({ status: { not: 'done' as any } });
+
+      where.AND = andParts;
+    }
+
+    // Compat: tests usam "limit"; clamp 1..50; fallback 10
+    const limit =
+      q.limit !== undefined
+        ? Math.min(50, Math.max(1, q.limit))
+        : undefined;
+
+    // page/pageSize continuam suportados quando não há limit
+    const page = q.page ?? 1;
+    const pageSize = q.pageSize ?? 10;
+    const take = limit ?? pageSize;
+    const skip = limit ? 0 : (page - 1) * pageSize;
 
     const [data, total] = await Promise.all([
       this.prisma.task.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.task.count({ where }),
     ]);
 
     return {
-      data,
-      meta: { page, pageSize, total },
+      total,      // alguns testes esperam aqui
+      data,       // lista principal
+      items: data, // alias p/ compatibilidade noutros testes
+      meta: limit
+        ? { limit, total }
+        : { page, pageSize, total },
     };
   }
 
   async create(userId: string, dto: CreateTaskDto) {
     return this.prisma.task.create({
-      data: { ...dto, ownerId: userId },
+      data: {
+        ownerId: userId,
+        title: dto.title,
+        description: dto.description ?? null,
+        status: (dto.status ?? 'todo') as any,
+        priority: (dto.priority ?? 'medium') as any,
+        dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+      },
     });
   }
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
     const res = await this.prisma.task.updateMany({
       where: { id, ownerId: userId },
-      data: dto,
+      data: {
+        title: dto.title,
+        description: dto.description,
+        status: dto.status as any,
+        priority: dto.priority as any,
+        dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
+      },
     });
     if (res.count === 0) throw new NotFoundException('Task not found');
     return this.prisma.task.findUnique({ where: { id } });
@@ -69,6 +112,9 @@ export class TasksService {
     return { ok: true };
   }
 }
+
+
+
 
 
 

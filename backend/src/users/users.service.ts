@@ -1,23 +1,32 @@
-import { ConflictException,Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(email: string, password: string) {
-    const exists = await this.prisma.user.findUnique({ where: { email } });
-    if (exists) throw new ConflictException('Email already registered');
+  findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await this.prisma.user.create({
-      data: { email, passwordHash }, // ❌ remove name
+  // Mantemos a assinatura com `name?`, mas ignoramos porque o modelo não tem esse campo
+  async create(email: string, passwordHash: string, _name?: string | null) {
+    return this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+      },
     });
+  }
 
-    return { id: user.id, email: user.email };
+  // Helper opcional para seeds/fixtures
+  async createWithPlainPassword(email: string, password: string, name?: string) {
+    const passwordHash = await bcrypt.hash(password, 10);
+    return this.create(email, passwordHash, name);
   }
 }
+
+
 
 

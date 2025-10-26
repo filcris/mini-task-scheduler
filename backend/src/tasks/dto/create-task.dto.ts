@@ -1,41 +1,35 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsISO8601, IsOptional, IsString, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export enum Priority {
-  LOW = 'LOW',
-  MEDIUM = 'MEDIUM',
-  HIGH = 'HIGH',
-}
-
-export enum Status {
-  TODO = 'TODO',
-  INPROGRESS = 'INPROGRESS',
-  DONE = 'DONE',
-}
+export type TaskStatus = 'todo' | 'doing' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high';
 
 export class CreateTaskDto {
-  @ApiProperty({ example: 'Comprar leite' })
+  @ApiProperty()
   @IsString()
-  @MinLength(1)
+  @IsNotEmpty()
+  @MaxLength(200)
   title!: string;
 
-  @ApiPropertyOptional({ example: 'No supermercado' })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   description?: string;
 
-  @ApiPropertyOptional({ example: '2025-12-31T18:00:00.000Z' })
+  @ApiProperty({ required: false, enum: ['todo', 'doing', 'done'] })
+  @IsOptional()
+  @IsEnum(['todo', 'doing', 'done'] as any)
+  status?: TaskStatus;
+
+  @ApiProperty({ required: false, enum: ['low', 'medium', 'high'] })
+  @IsOptional()
+  @IsEnum(['low', 'medium', 'high'] as any)
+  priority?: TaskPriority;
+
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsISO8601()
-  dueDate?: string | null;
-
-  @ApiPropertyOptional({ enum: Priority, default: Priority.MEDIUM })
-  @IsOptional()
-  @IsEnum(Priority)
-  priority?: Priority;
-
-  @ApiPropertyOptional({ enum: Status, default: Status.TODO })
-  @IsOptional()
-  @IsEnum(Status)
-  status?: Status;
+  dueAt?: string | null;
 }
+

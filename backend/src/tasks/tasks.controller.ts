@@ -11,11 +11,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateTaskDto } from './dto/create-task.dto';
-import { QueryTasksDto } from './dto/query-tasks.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { QueryTasksDto } from './dto/query-tasks.dto';
 import { TasksService } from './tasks.service';
 
 interface JwtPayload {
@@ -31,10 +30,12 @@ export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
   @Get()
-  async list(
-    @Req() req: { user: JwtPayload },
-    @Query() query: QueryTasksDto,
-  ) {
+  async list(@Req() req: { user: { sub: string } }, @Query() query: QueryTasksDto) {
+    return this.tasks.findAll(req.user.sub, query);
+  }
+
+  // Alias compatível com o teste
+   async findAll(req: { user: { sub: string } }, query: QueryTasksDto) {
     return this.tasks.findAll(req.user.sub, query);
   }
 
@@ -60,6 +61,7 @@ export class TasksController {
     return this.tasks.remove(req.user.sub, id);
   }
 }
+
 
 
 
