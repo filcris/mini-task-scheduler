@@ -1,78 +1,60 @@
-// test/auth.service.spec.ts
-import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
-
+import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '../src/auth/auth.service';
 import { UsersService } from '../src/users/users.service';
 
-// Mock do bcrypt para não depender de hashing real nos testes
+// ✅ Mock consistente de bcrypt
 jest.mock('bcrypt', () => ({
-  hash: jest.fn(async () => 'hashed_pw'),
-  compare: jest.fn(async () => true),
+  hash: jest.fn().mockResolvedValue('hashed_pw'),
+  compare: jest.fn().mockResolvedValue(true),
 }));
 
-describe('AuthService', () => {
+describe('AuthService (legacy unit)', () => {
   let auth: AuthService;
-  let users: jest.Mocked<UsersService>;
-  let jwt: jest.Mocked<JwtService>;
+
+  const users = {
+    create: jest.fn().mockResolvedValue({ id: 'u1', email: 'a@a.com' }),
+    findByEmail: jest.fn().mockResolvedValue({
+      id: 'u1',
+      email: 'a@a.com',
+      passwordHash: 'hashed_pw',
+    }),
+  };
+
+  const jwt = {
+    signAsync: jest.fn().mockResolvedValue('fake.jwt.token'),
+  };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
-        {
-          provide: UsersService,
-          useValue: {
-            findByEmail: jest.fn(),
-            create: jest.fn(), // <- a tua service expõe "create"
-          },
-        },
-        {
-          provide: JwtService,
-          useValue: {
-            signAsync: jest.fn(async () => 'fake.jwt.token'),
-          },
-        },
+        { provide: UsersService, useValue: users },
+        { provide: JwtService, useValue: jwt },
       ],
     }).compile();
 
     auth = moduleRef.get(AuthService);
-    users = moduleRef.get(UsersService) as any;
-    jwt = moduleRef.get(JwtService) as any;
   });
 
-  it('register: cria o utilizador e devolve o user', async () => {
-    users.create.mockResolvedValue({
-      id: 'u1',
-      email: 'a@a.com',
-      name: null,
-    } as any);
-
-    const res = await auth.register('a@a.com', 'secret123', undefined);
-
-    expect(users.create).toHaveBeenCalledWith({
-      email: 'a@a.com',
-      name: undefined,
-      passwordHash: 'hashed_pw',
-    });
-    // O register devolve o próprio user
-    expect(res.email).toBe('a@a.com');
-    expect(res.id).toBe('u1');
+  it('register', async () => {
+    const res = await auth.register('a@a.com', 'secret123', null);
+    expect(users.create).toHaveBeenCalledWith('a@a.com', expect.any(String), null);
+    expect(jwt.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: 'a@a.com' });
+    expect(res.access_token).toBe('fake.jwt.token');
   });
 
-  it('login: devolve access_token', async () => {
-    users.findByEmail.mockResolvedValue({
-      id: 'u1',
-      email: 'a@a.com',
-      name: null,
-      passwordHash: 'hashed_pw',
-    } as any);
-
+  it('login', async () => {
     const res = await auth.login('a@a.com', 'secret123');
-
-    // AuthService chama jwt.signAsync e devolve { access_token }
     expect(jwt.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: 'a@a.com' });
     expect(res.access_token).toBe('fake.jwt.token');
   });
 });
+
+
+
+
+
 

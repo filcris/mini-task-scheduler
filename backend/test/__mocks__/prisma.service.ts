@@ -2,12 +2,16 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class MockPrismaService {
-  user = { findUnique: jest.fn(), create: jest.fn(), upsert: jest.fn() };
+  user = {
+    findUnique: jest.fn(),
+  };
+
   task = {
-    findMany: jest.fn(),
     count: jest.fn(),
+    findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
-    delete: jest.fn(),
+    deleteMany: jest.fn(),
+    findUnique: jest.fn(),
   };
 }

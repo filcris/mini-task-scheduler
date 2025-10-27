@@ -1,91 +1,134 @@
+// src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Task, TaskPriority, TaskStatus } from '@prisma/client';
+import { Prisma, TaskPriority, TaskStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTaskDto } from './dto/create-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
+import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 
-type Paged<T> = { data: T[]; meta: { page: number; pageSize: number; total: number; pages: number } };
+/** Payload paginado esperado pelos testes */
+type Paged<T> = {
+  data: T[];
+  meta: { page: number; pageSize: number; total: number };
+};
 
 @Injectable()
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(userId: string, query: QueryTasksDto): Promise<Paged<Task>> {
-    const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 10));
+  /** Listagem com paginação + filtros */
+  async findAll(
+    userId: string,
+    query: QueryTasksDto,
+  ): Promise<
+    Paged<{
+      id: string;
+      title: string;
+      status: TaskStatus;
+      priority: TaskPriority;
+      dueAt: Date | null;
+      description: string | null;
+      ownerId: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  > {
+    const page = Number(query.page ?? 1);
+    const pageSize = Number(query.pageSize ?? 10);
 
-    const whereParts: Prisma.TaskWhereInput[] = [
-      { ownerId: userId },
-      query.search
-        ? { title: { contains: query.search, mode: 'insensitive' } }
-        : {},
-      query.status ? { status: query.status } : {},
-      query.priority ? { priority: query.priority } : {},
-    ];
+    const where: Prisma.TaskWhereInput = {
+      ownerId: userId,
+      // pesquisa por título/descrição (case-insensitive)
+      OR:
+        query.search && query.search.trim().length > 0
+          ? [
+              { title: { contains: query.search, mode: 'insensitive' } },
+              { description: { contains: query.search, mode: 'insensitive' } },
+            ]
+          : undefined,
+      // filtro por status/priority se enviados
+      status: query.status as TaskStatus | undefined,
+      priority: query.priority as TaskPriority | undefined,
+      // intervalo de datas de vencimento
+      dueAt:
+        query.dueFrom || query.dueTo
+          ? {
+              gte: query.dueFrom ? new Date(query.dueFrom) : undefined,
+              lte: query.dueTo ? new Date(query.dueTo) : undefined,
+            }
+          : undefined,
+    };
 
-    if (query.dueFrom || query.dueTo) {
-      const gte = query.dueFrom ? new Date(query.dueFrom) : undefined;
-      const lte = query.dueTo ? new Date(query.dueTo) : undefined;
-      whereParts.push({ dueAt: { gte, lte } });
-    }
-
-    if (query.overdue === 'true') {
-      whereParts.push({ dueAt: { lte: new Date() }, status: { not: TaskStatus.done } });
-    }
-
-    const where: Prisma.TaskWhereInput = { AND: whereParts };
-
-    const [total, data] = await Promise.all([
+    const [total, rows] = await Promise.all([
       this.prisma.task.count({ where }),
       this.prisma.task.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' } as Prisma.TaskOrderByWithRelationInput],
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
     ]);
 
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    return { data, meta: { page, pageSize, total, pages } };
+    return {
+      data: rows,
+      meta: { page, pageSize, total },
+    };
   }
 
-  async create(userId: string, dto: CreateTaskDto): Promise<Task> {
+  /** Criação de tarefa (associa pelo ownerId via input unchecked) */
+  async create(userId: string, dto: CreateTaskDto) {
     return this.prisma.task.create({
       data: {
         ownerId: userId,
         title: dto.title,
         description: dto.description ?? null,
-        status: dto.status ?? TaskStatus.todo,
-        priority: dto.priority ?? TaskPriority.medium,
-        dueAt: dto.dueAt ?? null,
+        dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+        priority: (dto.priority as TaskPriority) ?? TaskPriority.medium,
+        status: (dto.status as TaskStatus) ?? TaskStatus.todo,
       },
     });
   }
 
-  async update(userId: string, id: string, dto: UpdateTaskDto): Promise<Task> {
-    const updated = await this.prisma.task.updateMany({
+  /** Devolve uma tarefa do utilizador — lança 404 se não existir */
+  async findOne(userId: string, id: string) {
+    const task = await this.prisma.task.findFirst({
       where: { id, ownerId: userId },
-      data: {
-        title: dto.title,
-        description: dto.description,
-        status: dto.status,
-        priority: dto.priority,
-        dueAt: dto.dueAt ?? null,
-      },
     });
-    if (updated.count === 0) throw new NotFoundException('Task not found');
-    const task = await this.prisma.task.findUnique({ where: { id } });
     if (!task) throw new NotFoundException('Task not found');
     return task;
   }
 
-  async remove(userId: string, id: string): Promise<void> {
+  /** Atualização com verificação de owner */
+  async update(userId: string, id: string, dto: UpdateTaskDto) {
+    const res = await this.prisma.task.updateMany({
+      where: { id, ownerId: userId },
+      data: {
+        title: dto.title,
+        description: dto.description ?? undefined,
+        dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
+        priority: dto.priority as TaskPriority | undefined,
+        status: dto.status as TaskStatus | undefined,
+      },
+    });
+
+    if (res.count === 0) throw new NotFoundException('Task not found');
+    // findUnique pode devolver null — mas aqui só acontece se a task for removida entre update e read.
+    const updated = await this.prisma.task.findUnique({ where: { id } });
+    if (!updated) throw new NotFoundException('Task not found');
+    return updated;
+  }
+
+  /** Remoção com verificação de owner */
+  async remove(userId: string, id: string) {
     const res = await this.prisma.task.deleteMany({ where: { id, ownerId: userId } });
     if (res.count === 0) throw new NotFoundException('Task not found');
+    return { deleted: true };
   }
 }
+
+
+
 
 
 

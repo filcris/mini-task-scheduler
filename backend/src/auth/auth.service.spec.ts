@@ -1,78 +1,79 @@
-// src/auth/auth.service.spec.ts
-import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
 
-import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { UsersService } from '../users/users.service';
 
+// Mock do bcrypt no topo (evita "Cannot redefine property: hash")
 jest.mock('bcrypt', () => ({
-  hash: jest.fn(async () => 'hashed_pw'),
-  compare: jest.fn(async () => true),
+  __esModule: true,
+  hash: jest.fn(),
+  compare: jest.fn(),
 }));
 
 describe('AuthService (unit)', () => {
   let auth: AuthService;
-  let prisma: {
-    user: {
-      create: jest.Mock;
-      findUnique: jest.Mock;
-    };
+
+  const usersMock = {
+    create: jest.fn(),        // (email, passwordHash, name|null)
+    findByEmail: jest.fn(),   // (email)
   };
-  let jwt: jest.Mocked<JwtService>;
+
+  const jwtMock = {
+    signAsync: jest.fn(),     // (payload)
+  };
 
   beforeEach(async () => {
-    prisma = {
-      user: {
-        create: jest.fn(),
-        findUnique: jest.fn(),
-      },
-    };
+    jest.clearAllMocks();
+
+    // valores default dos mocks
+    (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_pw');
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    usersMock.create.mockResolvedValue({ id: 'u1', email: 'a@a.com' });
+    usersMock.findByEmail.mockResolvedValue({
+      id: 'u1',
+      email: 'a@a.com',
+      passwordHash: 'hashed_pw',
+    });
+
+    jwtMock.signAsync.mockResolvedValue('fake.jwt.token');
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: PrismaService, useValue: prisma },
-        {
-          provide: JwtService,
-          useValue: {
-            signAsync: jest.fn(async () => 'fake.jwt.token'),
-          },
-        },
+        { provide: UsersService, useValue: usersMock },
+        { provide: JwtService, useValue: jwtMock },
       ],
     }).compile();
 
     auth = moduleRef.get(AuthService);
-    jwt = moduleRef.get(JwtService) as any;
   });
 
-  it('register: cria user e devolve dados públicos', async () => {
-    prisma.user.create.mockResolvedValue({
-      id: 'u1',
-      email: 'a@a.com',
-      name: null,
-    });
+  it('register: cria user e devolve { access_token }', async () => {
+    const res = await auth.register('a@a.com', 'secret123', null);
 
-    const out = await auth.register('a@a.com', 'secret123');
+    expect(usersMock.create).toHaveBeenCalledTimes(1);
+    expect(usersMock.create).toHaveBeenCalledWith('a@a.com', expect.any(String), null);
 
-    expect(prisma.user.create).toHaveBeenCalled();
-    expect(out.id).toBe('u1');
-    expect(out.email).toBe('a@a.com');
-    // Não validamos passwordHash porque não deve ser exposta
+    expect(jwtMock.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: 'a@a.com' });
+    expect(res.access_token).toBe('fake.jwt.token');
   });
 
   it('login: devolve { access_token }', async () => {
-    prisma.user.findUnique.mockResolvedValue({
-      id: 'u1',
-      email: 'a@a.com',
-      name: null,
-      passwordHash: 'hashed_pw',
-    });
-
     const res = await auth.login('a@a.com', 'secret123');
 
-    expect(jwt.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: 'a@a.com' });
-    expect(res.access_token).toBe('fake.jwt.token'); // nome correto
+    expect(usersMock.findByEmail).toHaveBeenCalledWith('a@a.com');
+    expect(jwtMock.signAsync).toHaveBeenCalledWith({ sub: 'u1', email: 'a@a.com' });
+    expect(res.access_token).toBe('fake.jwt.token');
   });
 });
+
+
+
+
+
+
 
 

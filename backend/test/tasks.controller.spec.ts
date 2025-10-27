@@ -1,39 +1,32 @@
-import { ExecutionContext } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { TasksController } from 'src/tasks/tasks.controller';
-import { TasksService } from 'src/tasks/tasks.service';
-
-class MockGuard implements Partial<JwtAuthGuard> {
-  canActivate(ctx: ExecutionContext) {
-    const req = ctx.switchToHttp().getRequest();
-    req.user = { sub: 'u1', email: 'test@example.com' };
-    return true;
-  }
-}
+import { INestApplication } from '@nestjs/common';
+import { TasksController } from '../src/tasks/tasks.controller';
+import { TasksService } from '../src/tasks/tasks.service';
 
 describe('TasksController', () => {
-  let ctrl: TasksController;
-  let service: any;
+  let app: INestApplication;
+  let controller: TasksController;
+  const service = {
+    findAll: jest.fn().mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, total: 0 },
+    }),
+  };
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [TasksController],
-      providers: [
-        { provide: TasksService, useValue: { findAll: jest.fn(), create: jest.fn(), update: jest.fn(), remove: jest.fn() } },
-      ],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useClass(MockGuard)
-      .compile();
+      providers: [{ provide: TasksService, useValue: service }],
+    }).compile();
 
-    ctrl = moduleRef.get(TasksController);
-    service = moduleRef.get(TasksService);
+    app = moduleRef.createNestApplication();
+    await app.init();
+    controller = moduleRef.get(TasksController);
   });
 
-  it('GET /tasks', async () => {
-    service.findAll.mockResolvedValue({ items: [], total: 0 });
-    const res = await ctrl.findAll({ user: { sub: 'u1' } } as any, { page: 1, pageSize: 10 } as any);
-    expect(res.total).toBe(0);
+  it('lista com meta.total', async () => {
+    const res = await controller.findAll({ user: { sub: 'u1' } } as any, { page: 1, pageSize: 10 } as any);
+    expect(res.meta.total).toBe(0);
   });
 });
+
