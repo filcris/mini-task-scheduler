@@ -1,40 +1,24 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { IsEmail, IsString, MinLength } from 'class-validator';
-
 import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
-class RegisterDto {
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @MinLength(6)
-  password!: string;
-}
-
-class LoginDto {
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @MinLength(6)
-  password!: string;
-}
-
-@Controller('auth') // rotas finais: /api/auth/*
+@Controller('api/auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto.email, dto.password);
+  async register(@Body() dto: RegisterDto) {
+    // Passa o name (ou null) para alinhar com a assinatura do service
+    return this.auth.register(dto.email, dto.password, dto.name ?? null);
   }
 
   @Post('login')
-  login(@Body() dto: LoginDto) {
+  async login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);
   }
 }
+
 
 
 

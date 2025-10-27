@@ -1,21 +1,22 @@
 // backend/src/auth/dto/register.dto.ts
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, MinLength, MaxLength } from 'class-validator';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'user@example.com' })
+   @ApiProperty()
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'password123', minLength: 6 })
+  @ApiProperty()
   @IsString()
   @MinLength(6)
   password!: string;
 
-  @ApiPropertyOptional({ example: 'Filipa' })
+@ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  name?: string;
+  @MaxLength(100)
+  name?: string | null;
 }
 
 
