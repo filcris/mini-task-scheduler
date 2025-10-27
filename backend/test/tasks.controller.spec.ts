@@ -1,5 +1,6 @@
-import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+
 import { TasksController } from '../src/tasks/tasks.controller';
 import { TasksService } from '../src/tasks/tasks.service';
 

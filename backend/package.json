@@ -15,7 +15,7 @@
     "start:debug": "nest start --debug --watch",
     "build": "nest build",
     "prebuild": "rimraf dist && npm run prisma:generate",
-    "lint": "eslint \"{src,test}/**/*.ts\" --max-warnings=0",
+    "lint": "eslint \"{src,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

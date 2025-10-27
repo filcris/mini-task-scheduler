@@ -3,8 +3,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TaskPriority, TaskStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { QueryTasksDto } from './dto/query-tasks.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { QueryTasksDto } from './dto/query-tasks.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 
 /** Payload paginado esperado pelos testes */

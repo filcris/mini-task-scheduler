@@ -1,12 +1,11 @@
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 
+import { AuthService } from '../src/auth/auth.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TasksService } from '../src/tasks/tasks.service';
-import { AuthService } from '../src/auth/auth.service';
 import { UsersService } from '../src/users/users.service';
-import { JwtService } from '@nestjs/jwt';
-
 import { MockPrismaService } from './__mocks__/prisma.service';
 
 // ✅ Mock do módulo bcrypt logo no topo (evita "Cannot redefine property: hash")

@@ -1,5 +1,6 @@
-import { Test } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { Test } from '@nestjs/testing';
+
 import { AuthService } from '../src/auth/auth.service';
 import { UsersService } from '../src/users/users.service';
 

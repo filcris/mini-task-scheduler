@@ -1,6 +1,6 @@
+import { TaskPriority, TaskStatus } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { TaskPriority, TaskStatus } from '@prisma/client';
 
 export class QueryTasksDto {
   @IsOptional()
