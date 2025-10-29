@@ -20,7 +20,7 @@ export interface ReportsSummaryDto {
 @ApiTags('reports')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/reports')
+@Controller('reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 

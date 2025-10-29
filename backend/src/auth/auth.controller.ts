@@ -1,23 +1,31 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Controller, Post, Body, Get, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport'; // se usas @nestjs/passport
+import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
 
-@Controller('api/auth')
+@Controller('auth') // <— sem 'api/' aqui
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
-
-  @Post('register')
-  async register(@Body() dto: RegisterDto) {
-    // Passa o name (ou null) para alinhar com a assinatura do service
-    return this.auth.register(dto.email, dto.password, dto.name ?? null);
-  }
+  constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() dto: LoginDto) {
-    return this.auth.login(dto.email, dto.password);
+  login(@Body() dto: { email: string; password: string }) {
+    return this.authService.login(dto.email, dto.password);
+  }
+
+  @Post('register')
+  register(@Body() dto: { email: string; password: string; name?: string }) {
+    return this.authService.register(dto.email, dto.password, dto.name || null);
+  }
+
+  // <-- NOVO
+  @UseGuards(AuthGuard('jwt'))
+  @Get('me')
+  me(@Req() req: Request) {
+    // req.user vem da JwtStrategy.validate
+    return req.user;
   }
 }
+
 
 
 

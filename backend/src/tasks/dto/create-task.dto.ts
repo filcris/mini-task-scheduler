@@ -1,41 +1,66 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TaskPriority, TaskStatus } from '@prisma/client';
-import { Transform } from 'class-transformer';
-import { IsDate, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
-type DateLike = string | number | Date | null | undefined;
+/** ATENÇÃO: estes enums refletem o teu schema.prisma (minúsculas) */
+export enum TaskStatus {
+  todo = 'todo',
+  doing = 'doing',
+  done = 'done',
+}
+
+export enum TaskPriority {
+  low = 'low',
+  medium = 'medium',
+  high = 'high',
+}
 
 export class CreateTaskDto {
-  @ApiProperty({ example: 'Comprar café' })
+  @ApiProperty({ example: 'Preparar apresentação' })
   @IsString()
-  @MaxLength(200)
-  title!: string;
+  @IsNotEmpty()
+  title!: string
 
-  @ApiPropertyOptional({ example: 'Pacote de 1kg moído' })
+  @ApiPropertyOptional({ example: 'Slides e resumo até sexta' })
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
-  description?: string | null;
+  description?: string | null
 
-  @ApiPropertyOptional({ enum: TaskStatus, example: TaskStatus.todo })
-  @IsOptional()
-  @IsEnum(TaskStatus)
-  status?: TaskStatus;
-
-  @ApiPropertyOptional({ enum: TaskPriority, example: TaskPriority.medium })
+  @ApiPropertyOptional({
+    enum: TaskPriority,
+    example: TaskPriority.medium,
+    default: TaskPriority.medium,
+  })
   @IsOptional()
   @IsEnum(TaskPriority)
-  priority?: TaskPriority;
+  priority?: TaskPriority
 
-  @ApiPropertyOptional({ type: String, example: '2025-10-27T10:00:00.000Z' })
-  @IsOptional()
-  @Transform(({ value }: { value: DateLike }) => {
-    if (value == null || value === '') return undefined;
-    const d = value instanceof Date ? value : new Date(value);
-    return Number.isNaN(d.getTime()) ? undefined : d;
+  @ApiPropertyOptional({
+    enum: TaskStatus,
+    example: TaskStatus.todo,
+    default: TaskStatus.todo,
   })
-  @IsDate()
-  dueAt?: Date | null;
+  @IsOptional()
+  @IsEnum(TaskStatus)
+  status?: TaskStatus
+
+  @ApiPropertyOptional({
+    example: '2025-10-30T00:00:00.000Z',
+    description: 'Data limite (ISO 8601). No modelo é guardado em dueAt.',
+  })
+  @IsOptional()
+  @IsISO8601()
+  dueDate?: string | null
+
+  @ApiPropertyOptional({
+    example: '2025-10-30T00:00:00.000Z',
+    description: 'Alternativa direta ao dueDate — será mapeado para dueAt no modelo.',
+  })
+  @IsOptional()
+  @IsISO8601()
+  dueAt?: string | null
 }
+
+
+
 
 

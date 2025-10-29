@@ -1,146 +1,154 @@
-import React from "react";
-import { get, patch } from "../utils/api";
+import React from 'react'
+import { get, patch } from '../utils/api'
+import { on } from '../utils/bus'
+import { useToast } from '../ui/Toast'
 
 type Task = {
-  id: string;
-  title: string;
-  status: "todo" | "doing" | "done";
-  priority: "low" | "medium" | "high";
-  dueAt?: string | null;
-  description?: string | null;
-};
+  id: string
+  title: string
+  status: 'todo'|'doing'|'done'|'TODO'|'DOING'|'DONE'
+  priority: 'low'|'medium'|'high'|'LOW'|'MEDIUM'|'HIGH'
+  dueAt?: string | null
+  dueDate?: string | null
+  description?: string | null
+  updatedAt?: string
+}
 
-type ColKey = "todo" | "doing" | "done";
+type ColKey = 'todo' | 'doing' | 'done'
 const COLS: { key: ColKey; title: string }[] = [
-  { key: "todo",  title: "Por fazer" },
-  { key: "doing", title: "A fazer"   },
-  { key: "done",  title: "Feitas"    },
-];
-
-const priorityDot: Record<Task["priority"], string> = {
-  low: "bg-gray-300",
-  medium: "bg-amber-400",
-  high: "bg-rose-500",
-};
+  { key: 'todo',  title: 'Por fazer' },
+  { key: 'doing', title: 'A fazer'   },
+  { key: 'done',  title: 'Concluídas'}
+]
+const toUiStatus = (s: Task['status']) => String(s).toLowerCase() as ColKey
+const toUiPriority = (p: Task['priority']) => String(p).toLowerCase() as 'low'|'medium'|'high'
 
 export default function KanbanPage() {
-  const [loading, setLoading] = React.useState(true);
-  const [data, setData] = React.useState<Record<ColKey, Task[]>>({ todo: [], doing: [], done: [] });
-  const [dragId, setDragId] = React.useState<string | null>(null);
-  const [dragOverCol, setDragOverCol] = React.useState<ColKey | null>(null);
+  const toast = useToast()
+  const [loading, setLoading] = React.useState(true)
+  const [data, setData] = React.useState<Record<ColKey, Task[]>>({ todo: [], doing: [], done: [] })
+  const [error, setError] = React.useState('')
 
   async function load() {
-    setLoading(true);
-    const res = await get<{ data: Task[]; meta: any }>(`/tasks?limit=200`);
-    const buckets: Record<ColKey, Task[]> = { todo: [], doing: [], done: [] };
-    res.data.forEach(t => buckets[t.status].push(t));
-    setData(buckets);
-    setLoading(false);
-  }
-  React.useEffect(() => { load(); }, []);
-
-  function onDragStart(e: React.DragEvent, taskId: string) {
-    e.dataTransfer.setData("text/plain", taskId);
-    e.dataTransfer.effectAllowed = "move";
-    setDragId(taskId);
-  }
-
-  function onDragOver(e: React.DragEvent, col: ColKey) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverCol(col);
+    setLoading(true); setError('')
+    try {
+      const res = await get<any>('/tasks?limit=200')
+      const list: Task[] = Array.isArray(res) ? res : (res?.data || res?.items || res?.tasks || [])
+      const buckets: Record<ColKey, Task[]> = { todo: [], doing: [], done: [] }
+      list.forEach(t => { buckets[toUiStatus(t.status)].push(t) })
+      setData(buckets)
+    } catch (e: any) {
+      const msg = e?.message || 'Falha a carregar tarefas'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
   }
 
+  React.useEffect(() => {
+    load()
+    const off = on('tasks:changed', () => load())
+    return () => off()
+  }, [])
+
+  function onDragStart(e: React.DragEvent, id: string) {
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
   async function onDrop(e: React.DragEvent, col: ColKey) {
-    e.preventDefault();
-    const id = e.dataTransfer.getData("text/plain") || dragId;
-    if (!id) return;
-    setDragOverCol(null);
+    e.preventDefault()
+    const id = e.dataTransfer.getData('text/plain')
+    if (!id) return
 
-    // encontra a task e atualiza UI otimisticamente
-    let from: ColKey | null = null;
-    let task: Task | undefined;
-    (Object.keys(data) as ColKey[]).forEach(k => {
-      const idx = data[k].findIndex(t => t.id === id);
-      if (idx !== -1) { from = k; task = data[k][idx]; }
-    });
-    if (!task || from === col) return;
-
+    let moved: Task | undefined
     setData(prev => {
-      const next = { ...prev };
-      next[from! ] = prev[from!].filter(t => t.id !== id);
-      next[col] = [{ ...task!, status: col }, ...prev[col]];
-      return next;
-    });
+      const next: Record<ColKey, Task[]> = { todo:[...prev.todo], doing:[...prev.doing], done:[...prev.done] }
+      (Object.keys(next) as ColKey[]).forEach(k => {
+        const i = next[k].findIndex(t => t.id === id)
+        if (i !== -1) { moved = next[k][i]; next[k].splice(i,1) }
+      })
+      if (moved) next[col].unshift({ ...moved!, status: col as any })
+      return next
+    })
 
     try {
-      await patch(`/tasks/${id}`, { status: col });
+      await patch(`/tasks/${id}`, { status: col })
+      toast.success('Movida no kanban ✔️')
     } catch {
-      // rollback em caso de erro
-      setData(prev => {
-        const next = { ...prev };
-        next[col] = prev[col].filter(t => t.id !== id);
-        next[from!] = [{ ...task!, status: from! }, ...prev[from!]];
-        return next;
-      });
-      alert("Falha ao mover tarefa.");
+      toast.error('Não foi possível mover a tarefa')
+      load()
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-slate-800 dark:text-slate-100">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Kanban</h2>
-        <button className="btn-outline" onClick={load}>Recarregar</button>
+        <div className="text-sm text-slate-600 dark:text-slate-300">
+          {Object.values(data).reduce((n,arr)=>n+arr.length,0)} tarefa(s)
+        </div>
       </div>
 
+      {error && <div className="text-sm text-red-600">{error}</div>}
+
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="card h-[60vh] p-4 animate-pulse" />)}
+        <div className="grid md:grid-cols-3 gap-4">
+          {Array.from({length:3}).map((_,i)=><div key={i} className="card h-[60vh] p-4 animate-pulse dark:bg-slate-900" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-3 gap-4">
           {COLS.map(col => (
             <div
               key={col.key}
-              className={`card p-3 min-h-[60vh] flex flex-col ${dragOverCol === col.key ? "ring-2 ring-brand/50" : ""}`}
-              onDragOver={(e) => onDragOver(e, col.key)}
-              onDrop={(e) => onDrop(e, col.key)}
+              className="card p-3 min-h-[60vh] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              onDragOver={onDragOver}
+              onDrop={(e)=>onDrop(e, col.key)}
             >
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold">{col.title}</h3>
-                <span className="text-xs text-gray-500">{data[col.key].length}</span>
+                <span className="text-xs text-slate-500">{data[col.key].length}</span>
               </div>
 
-              <div className="flex-1 space-y-2">
+              <div className="space-y-2">
                 {data[col.key].map(t => (
                   <div
                     key={t.id}
                     draggable
                     onDragStart={(e)=>onDragStart(e, t.id)}
-                    className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/50 p-3 hover:bg-white dark:hover:bg-gray-900 cursor-move transition"
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 cursor-move hover:bg-slate-50 dark:hover:bg-slate-700"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between">
                       <p className="font-medium">{t.title}</p>
-                      <span className={`inline-flex items-center gap-1 text-xs ${priorityDot[t.priority]} text-white rounded-full px-2 py-0.5`}>
-                        ● {t.priority}
+                      <span className={`text-xs px-2 rounded-full text-white ${
+                        toUiPriority(t.priority) === 'high' ? 'bg-rose-500' :
+                        toUiPriority(t.priority) === 'medium' ? 'bg-amber-500' : 'bg-slate-400'
+                      }`}>
+                        {toUiPriority(t.priority)}
                       </span>
                     </div>
-                    {t.description && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{t.description}</p>}
-                    <p className="text-[11px] text-gray-500 mt-2">
-                      {t.dueAt ? `Limite: ${new Date(t.dueAt).toLocaleString()}` : "Sem prazo"}
+                    {t.description && <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{t.description}</p>}
+                    <p className="text-[11px] text-slate-500 mt-2">
+                      {(t.dueDate ?? t.dueAt) ? `Entrega: ${new Date((t.dueDate ?? t.dueAt)!).toLocaleDateString('pt-PT')}` : 'Sem prazo'}
                     </p>
                   </div>
                 ))}
-              </div>
-
-              <div className="pt-3 text-xs text-gray-500">
-                Arrasta tarefas para aqui para mudar o estado.
+                {data[col.key].length === 0 && (
+                  <div className="text-xs text-slate-500">Sem tarefas nesta coluna.</div>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
     </div>
-  );
+  )
 }
+
+
+
+

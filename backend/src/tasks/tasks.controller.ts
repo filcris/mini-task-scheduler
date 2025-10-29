@@ -9,47 +9,46 @@ import {
   Query,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateTaskDto } from './dto/create-task.dto';
-import { QueryTasksDto } from './dto/query-tasks.dto';
-import { UpdateTaskDto } from './dto/update-task.dto';
-import { TasksService } from './tasks.service';
+} from '@nestjs/common'
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { TasksService } from './tasks.service'
+import { CreateTaskDto } from './dto/create-task.dto'
 
 @ApiTags('tasks')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/tasks')
+@Controller('tasks')
 export class TasksController {
-  constructor(private readonly tasks: TasksService) {}
+  constructor(private readonly tasksService: TasksService) {}
 
   @Get()
-  findAll(@Req() req: any, @Query() q: QueryTasksDto) {
-    return this.tasks.findAll(req.user.sub, q);
-  }
-
-  @Get(':id')
-  findOne(@Req() req: any, @Param('id') id: string) {
-    return this.tasks.findOne(req.user.sub, id);
+  list(@Req() req: any, @Query() query: any) {
+    const userId = req.user?.sub || req.user?.id || req.user?.userId
+    return this.tasksService.list(userId, query)
   }
 
   @Post()
   create(@Req() req: any, @Body() dto: CreateTaskDto) {
-    return this.tasks.create(req.user.sub, dto);
+    const userId = req.user?.sub || req.user?.id || req.user?.userId
+    return this.tasksService.create(userId, dto)
   }
 
   @Patch(':id')
-  update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateTaskDto) {
-    return this.tasks.update(req.user.sub, id, dto);
+  update(@Req() req: any, @Param('id') id: string, @Body() dto: Partial<CreateTaskDto>) {
+    const userId = req.user?.sub || req.user?.id || req.user?.userId
+    return this.tasksService.update(userId, id, dto)
   }
 
   @Delete(':id')
   remove(@Req() req: any, @Param('id') id: string) {
-    return this.tasks.remove(req.user.sub, id);
+    const userId = req.user?.sub || req.user?.id || req.user?.userId
+    return this.tasksService.remove(userId, id)
   }
 }
+
+
+
 
 
 

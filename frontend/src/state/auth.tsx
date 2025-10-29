@@ -1,63 +1,48 @@
-import React from 'react';
-import * as api from '../lib/api';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 
-type User = { id: string; email: string } | null;
-
-type AuthContextType = {
-  user: User;
+type AuthContextValue = {
   token: string | null;
-  loading: boolean;
-  error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  isAuthed: boolean;
+  setToken: (t: string | null) => void;
   logout: () => void;
 };
 
-const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<User>(null);
-  const [token, setToken] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  // Recarrega token do localStorage
-  React.useEffect(() => {
-    const t = localStorage.getItem('token');
-    if (t) setToken(t);
-  }, []);
-
-  const login = React.useCallback(async (email: string, password: string) => {
-    setLoading(true);
-    setError(null);
+  const [token, setTokenState] = useState<string | null>(() => {
     try {
-      const res = await api.login(email, password); // deve devolver { access_token }
-      const tk = res.access_token || (res as any).token;
-      if (!tk) throw new Error('Token ausente');
-      localStorage.setItem('token', tk);
-      setToken(tk);
-      // Opcional: poderias buscar /me para obter o utilizador real
-      setUser({ id: 'me', email });
-    } catch (e: any) {
-      setError(e?.message || 'Login falhou');
-      throw e;
-    } finally {
-      setLoading(false);
+      return localStorage.getItem('token');
+    } catch {
+      return null;
     }
-  }, []);
+  });
 
-  const logout = React.useCallback(() => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-  }, []);
+  const setToken = (t: string | null) => {
+    setTokenState(t);
+    try {
+      if (t) localStorage.setItem('token', t);
+      else localStorage.removeItem('token');
+    } catch {
+      // ignore storage errors (Safari private mode, etc.)
+    }
+  };
 
-  const value: AuthContextType = { user, token, loading, error, login, logout };
+  const logout = () => setToken(null);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ token, isAuthed: !!token, setToken, logout }),
+    [token]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const ctx = React.useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth deve ser usado dentro de <AuthProvider>');
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within <AuthProvider>');
+  }
   return ctx;
 }
+

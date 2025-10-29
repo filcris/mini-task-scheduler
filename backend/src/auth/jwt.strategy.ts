@@ -1,28 +1,27 @@
-import { Injectable } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-
-export interface JwtPayload {
-  sub: string;         // user id
-  email: string;
-  iat?: number;
-  exp?: number;
-}
+import { Injectable } from '@nestjs/common'
+import { PassportStrategy } from '@nestjs/passport'
+import { ExtractJwt, Strategy } from 'passport-jwt'
+import { ConfigService } from '@nestjs/config'
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(configService: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Authorization: Bearer <token>
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET, // defina no .env
-    });
+      secretOrKey: configService.get<string>('JWT_SECRET') || process.env.JWT_SECRET || 'supersecret',
+    })
   }
 
-  // O que volta daqui fica em req.user
-  async validate(payload: JwtPayload) {
-    // payload = { sub, email, iat, exp }
-    return payload;
+  async validate(payload: any) {
+    // Tudo o que devolvermos aqui fica disponível em req.user
+    // e é o que usamos no controller e no service.
+    return {
+      sub: payload.sub, // ID do utilizador (UUID)
+      email: payload.email,
+    }
   }
 }
+
+
 

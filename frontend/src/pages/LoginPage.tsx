@@ -1,67 +1,53 @@
-import React from "react";
-import { useAuth } from "../state/auth";
-import Spinner from "../components/Spinner";
+import React, { useState } from 'react'
+import { login as apiLogin, me as apiMe } from '../utils/api'
+import { useNavigate } from 'react-router-dom'
 
 export default function LoginPage() {
-  const { login, loading, error } = useAuth();
-  const [email, setEmail] = React.useState("test@example.com");
-  const [password, setPassword] = React.useState("password123");
+  const [email, setEmail] = useState('test@example.com')
+  const [password, setPassword] = useState('password123')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    await login(email, password);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      await apiLogin(email, password)
+      try { await apiMe() } catch {}
+      navigate('/tasks', { replace: true })
+    } catch (err: any) {
+      setError(err?.message || 'Falha no login')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="grid place-items-center py-10">
-      <form onSubmit={onSubmit} className="card w-full max-w-md space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">Login</h2>
-          <p className="text-sm text-[rgb(var(--muted))]">Entre com as suas credenciais de teste.</p>
-        </div>
-
-        {error && (
-          <div role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-600 ring-1 ring-red-500/20">
-            {error}
+    <div className="min-h-screen grid place-items-center p-4">
+      <div className="card w-full max-w-md p-6">
+        <h1 className="text-xl font-semibold mb-4">Entrar</h1>
+        {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="label">Email</label>
+            <input className="input" value={email} onChange={(e)=>setEmail(e.target.value)} />
           </div>
-        )}
-
-        <div>
-          <label htmlFor="email" className="label">Email</label>
-          <input
-            id="email"
-            name="email"
-            placeholder="email"
-            type="email"
-            className="input"
-            value={email}
-            onChange={(e)=>setEmail(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="label">Password</label>
-          <input
-            id="password"
-            name="password"
-            placeholder="password"
-            type="password"
-            className="input"
-            value={password}
-            onChange={(e)=>setPassword(e.target.value)}
-          />
-        </div>
-
-        <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-          {loading ? <span className="flex items-center justify-center gap-2"><Spinner/> A entrar…</span> : "Entrar"}
-        </button>
-
-        <p className="text-center text-xs text-[rgb(var(--muted))]">
-          Demo: <code>test@example.com</code> / <code>password123</code>
-        </p>
-      </form>
+          <div>
+            <label className="label">Password</label>
+            <input className="input" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} />
+          </div>
+          <button className="btn-primary w-full" disabled={loading} type="submit">
+            {loading ? 'A entrar…' : 'Entrar'}
+          </button>
+        </form>
+      </div>
     </div>
-  );
+  )
 }
+
+
+
 
 

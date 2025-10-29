@@ -1,63 +1,154 @@
-// src/api.ts
-// URL da API (browser → backend)
-export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '')
+// src/utils/api.ts
 
-// Tenta encontrar o token em várias chaves ou cookie
-function getToken(): string | null {
-  const keys = ['token', 'access_token', 'jwt']
-  for (const k of keys) {
-    const v = localStorage.getItem(k)
-    if (v) return v
+// Base da API: usa VITE_API_URL se existir; senão, fallback para http://localhost:4000/api
+const API_BASE =
+  (import.meta as any)?.env?.VITE_API_URL?.replace(/\/$/, '') ?? 'http://localhost:4000/api';
+
+// Helpers de token
+const TOKEN_KEY = 'token';
+
+export function setToken(token: string | null) {
+  if (!token) {
+    localStorage.removeItem(TOKEN_KEY);
+    return;
   }
-  // tenta cookie "token"
-  const m = document.cookie.match(/(?:^|;\s*)token=([^;]+)/)
-  return m ? decodeURIComponent(m[1]) : null
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
-function headers() {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' }
-  const token = getToken()
-  if (token) h['Authorization'] = `Bearer ${token}`
-  return h
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
 }
 
-// Se for 401, manda para /login
-async function handle<T>(res: Response): Promise<T> {
-  if (res.status === 401) {
-    // remove tokens “velhos”
-    localStorage.removeItem('token')
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('jwt')
-    // opcional: limpa cookie
-    document.cookie = 'token=; Max-Age=0; path=/'
-    // redireciona
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login'
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+// Função central de fetch (evita // duplos e /api/api)
+async function fetchJson<T = any>(
+  path: string,
+  init: RequestInit = {},
+  opts?: { withAuth?: boolean },
+): Promise<T> {
+  const url =
+    path.startsWith('http')
+      ? path
+      : `${API_BASE}/${path.replace(/^\/+/, '')}`; // junta base + path sem barras duplicadas
+
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('Content-Type') && init.method && init.method !== 'GET') {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (opts?.withAuth !== false) {
+    const token = getToken();
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
-    throw new Error('Unauthorized')
   }
+
+  const res = await fetch(url, { ...init, headers });
+
   if (!res.ok) {
-    const txt = await res.text().catch(() => '')
-    throw new Error(txt || `${res.status} ${res.statusText}`)
+    // tenta extrair mensagem de erro da API
+    let detail = '';
+    try {
+      const data = await res.json();
+      detail = data?.message ?? JSON.stringify(data);
+    } catch {
+      detail = await res.text();
+    }
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`);
   }
-  return res.json() as Promise<T>
+
+  // sem conteúdo
+  if (res.status === 204) return undefined as unknown as T;
+
+  return (await res.json()) as T;
 }
 
-export async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    credentials: 'include',
-    headers: headers(),
-  })
-  return handle<T>(res)
-}
+/* -------------------- AUTH -------------------- */
 
-export async function post<T>(path: string, body: any): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+type LoginResponse = { access_token: string };
+
+export async function login(email: string, password: string): Promise<LoginResponse> {
+  const out = await fetchJson<LoginResponse>('/auth/login', {
     method: 'POST',
-    headers: headers(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-  })
-  return handle<T>(res)
+    body: JSON.stringify({ email, password }),
+  }, { withAuth: false });
+
+  setToken(out.access_token);
+  return out;
 }
+
+export async function register(email: string, password: string, name: string | null) {
+  return fetchJson('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, name }),
+  }, { withAuth: false });
+}
+
+export async function me() {
+  return fetchJson('/auth/me', { method: 'GET' });
+}
+
+export function logout() {
+  clearToken();
+}
+
+/* -------------------- HEALTH -------------------- */
+
+export async function health() {
+  return fetchJson('/health', { method: 'GET' }, { withAuth: false });
+}
+
+/* -------------------- TASKS -------------------- */
+
+export type QueryTasks = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: 'todo' | 'doing' | 'done';
+  priority?: 'low' | 'medium' | 'high';
+  dueFrom?: string;
+  dueTo?: string;
+  overdue?: 'true' | 'false';
+};
+
+export async function listTasks(q: QueryTasks = {}) {
+  const params = new URLSearchParams();
+  Object.entries(q).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && String(v) !== '') params.set(k, String(v));
+  });
+  const qs = params.toString();
+  return fetchJson(`/tasks${qs ? `?${qs}` : ''}`, { method: 'GET' });
+}
+
+export type CreateTaskDto = {
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;   // ISO
+  priority?: 'low' | 'medium' | 'high';
+  status?: 'todo' | 'doing' | 'done';
+};
+
+export async function createTask(dto: CreateTaskDto) {
+  return fetchJson('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export type UpdateTaskDto = Partial<CreateTaskDto>;
+
+export async function updateTask(id: string, dto: UpdateTaskDto) {
+  return fetchJson(`/tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+export async function deleteTask(id: string) {
+  return fetchJson(`/tasks/${id}`, { method: 'DELETE' });
+}
+
 
