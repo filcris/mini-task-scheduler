@@ -1,0 +1,37 @@
+# Normalização de finais de linha
+*           text=auto
+
+# Forçar LF para código-fonte (bom para Linux/Docker/CI)
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.json      text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.css       text eol=lf
+*.scss      text eol=lf
+*.html      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.prisma    text eol=lf
+*.md        text eol=lf
+*.sh        text eol=lf
+
+# Em Windows, manter CRLF onde faz sentido
+*.bat       text eol=crlf
+*.ps1       text eol=crlf
+
+# Binários
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.pdf       binary
+*.ico       binary
+
+# Opcional: tratar lockfiles apenas como texto (evitar normalizações indevidas)
+package-lock.json text eol=lf -diff
+frontend/package-lock.json text eol=lf -diff
+backend/package-lock.json  text eol=lf -diff

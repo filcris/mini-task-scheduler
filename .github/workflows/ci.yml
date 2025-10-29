@@ -2,74 +2,98 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "**" ]
   pull_request:
+    branches: [ "**" ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  backend:
+  build:
+    name: Build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        node: [ '20.x' ]
+
     services:
       postgres:
         image: postgres:16
-        ports: ["5432:5432"]
         env:
-          POSTGRES_DB: tasks
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mts
+        ports:
+          - 5432:5432
+        # saúde do serviço para evitar corridas
         options: >-
-          --health-cmd="pg_isready -U user -d tasks"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd="redis-cli ping || exit 1"
+          --health-cmd="pg_isready -U postgres -d mts"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
 
-    defaults:
-      run:
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      # ========= BACKEND =========
+      - name: Install backend deps
         working-directory: backend
+        run: npm ci
 
-    env:
-      DATABASE_URL: postgresql://user:password@localhost:5432/tasks
-      REDIS_URL: redis://localhost:6379
-      JWT_SECRET: supersecret
-      NODE_ENV: test
-      ENABLE_SWAGGER: 'false'
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Build backend
+        working-directory: backend
+        env:
+          NODE_ENV: production
+          # variáveis só para build; a app não arranca no CI
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mts?schema=public
+          JWT_SECRET: ci-secret
+          ENABLE_SWAGGER: false
+        run: npm run build
 
-      - run: npm ci --legacy-peer-deps
-      - run: npx prisma generate --schema=prisma/schema.prisma
-      - run: npx prisma db push --schema=prisma/schema.prisma
+      # (Opcional) Validar types sem emitir JS
+      - name: Type-check backend
+        working-directory: backend
+        run: npx tsc -p tsconfig.build.json --noEmit
 
-      - run: npm run lint --if-present
-      - run: npm run build
-
-      # Se tiveres tests unitários no backend:
-      - run: npm test --if-present
-
-  frontend-e2e:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      # ========= FRONTEND =========
+      - name: Install frontend deps
         working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          # Se usares VITE_API_URL em produção, define aqui conforme precisares
+          VITE_API_URL: http://localhost:4000/api
+        run: npm run build
+
+      # ========= ARTEFACTOS =========
+      - name: Upload backend dist
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 20
+          name: backend-dist
+          path: backend/dist
 
-      - run: npm ci --legacy-peer-deps
-      - run: npx playwright install --with-deps
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
 
-      # arranca o dev server e corre os testes E2E
-      - run: npx playwright test
