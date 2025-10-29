@@ -1,33 +1,46 @@
-import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-
-import { TasksController } from '../src/tasks/tasks.controller';
-import { TasksService } from '../src/tasks/tasks.service';
+import { Test } from '@nestjs/testing'
+import { TasksController } from '../src/tasks/tasks.controller'
+import { TasksService } from '../src/tasks/tasks.service'
 
 describe('TasksController', () => {
-  let app: INestApplication;
-  let controller: TasksController;
-  const service = {
-    findAll: jest.fn().mockResolvedValue({
-      data: [],
-      meta: { page: 1, pageSize: 10, total: 0 },
-    }),
-  };
+  let controller: TasksController
+  let service: jest.Mocked<TasksService>
 
   beforeEach(async () => {
-    const moduleRef = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       controllers: [TasksController],
-      providers: [{ provide: TasksService, useValue: service }],
-    }).compile();
+      providers: [
+        {
+          provide: TasksService,
+          useValue: {
+            list: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            remove: jest.fn(),
+          },
+        },
+      ],
+    }).compile()
 
-    app = moduleRef.createNestApplication();
-    await app.init();
-    controller = moduleRef.get(TasksController);
-  });
+    controller = module.get(TasksController)
+    service = module.get(TasksService) as any
+  })
 
-  it('lista com meta.total', async () => {
-    const res = await controller.findAll({ user: { sub: 'u1' } } as any, { page: 1, pageSize: 10 } as any);
-    expect(res.meta.total).toBe(0);
-  });
-});
+  it('GET /tasks -> list', async () => {
+    service.list.mockResolvedValue([{ id: 't1', title: 'A' } as any])
+    // no Nest, costumamos ter req.user com { userId, email }
+    const res = await controller.list({ user: { userId: 'u1' } } as any, { page: 1, pageSize: 10 } as any)
+    expect(service.list).toHaveBeenCalledWith('u1', { page: 1, pageSize: 10 })
+    expect(res).toEqual([{ id: 't1', title: 'A' }])
+  })
+
+  it('POST /tasks -> create', async () => {
+    service.create.mockResolvedValue({ id: 't2', title: 'Nova' } as any)
+    const dto = { title: 'Nova' }
+    const res = await controller.create({ user: { userId: 'u1' } } as any, dto as any)
+    expect(service.create).toHaveBeenCalledWith('u1', dto)
+    expect(res).toEqual({ id: 't2', title: 'Nova' })
+  })
+})
+
 
