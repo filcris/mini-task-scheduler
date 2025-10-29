@@ -33,14 +33,27 @@
     "@typescript-eslint/eslint-plugin": "^6.13.1",
     "@typescript-eslint/parser": "^6.13.1",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/expect": "^2.1.9",
+    "@vitest/mocker": "^2.1.9",
+    "@vitest/pretty-format": "^2.1.9",
+    "@vitest/runner": "^2.1.9",
+    "@vitest/snapshot": "^2.1.9",
+    "@vitest/utils": "^2.1.9",
     "autoprefixer": "^10.4.21",
+    "cac": "^6.7.14",
+    "chai": "^5.3.3",
     "eslint": "^8.57.0",
     "jsdom": "^27.0.1",
+    "pathe": "^1.1.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.16",
+    "tinypool": "^1.1.1",
+    "tinyrainbow": "^1.2.0",
+    "tinyspy": "^3.0.2",
     "typescript": "^5.4.5",
     "vite": "^5.4.21",
-    "vitest": "^2.1.2"
+    "vite-node": "^2.1.9",
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18.17.0"
