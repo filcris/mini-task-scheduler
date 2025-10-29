@@ -1,15 +1,19 @@
-// src/test/setup.ts
-import { afterEach, vi, expect } from 'vitest';
-import { cleanup } from '@testing-library/react';
-import * as matchers from '@testing-library/jest-dom/matchers';
+import '@testing-library/jest-dom'
 
-// adiciona todos os matchers do jest-dom (toBeInTheDocument, toHaveTextContent, etc.)
-expect.extend(matchers);
+// polyfill matchMedia para jsdom
+if (!window.matchMedia) {
+  // @ts-ignore
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},       // deprecated
+    removeListener: () => {},    // deprecated
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })
+}
 
-afterEach(() => {
-  cleanup();
-  localStorage.clear();
-  vi.restoreAllMocks();
-});
 
 
