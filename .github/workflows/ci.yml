@@ -2,98 +2,59 @@ name: CI
 
 on:
   push:
-    branches: [ "**" ]
   pull_request:
-    branches: [ "**" ]
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build (Node ${{ matrix.node }})
+  backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      matrix:
-        node: [ '20.x' ]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: mts
-        ports:
-          - 5432:5432
-        # saúde do serviço para evitar corridas
-        options: >-
-          --health-cmd="pg_isready -U postgres -d mts"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+      - name: Use Node 20
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 20
           cache: 'npm'
-          cache-dependency-path: |
-            frontend/package-lock.json
-            backend/package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
-      # ========= BACKEND =========
-      - name: Install backend deps
+      - name: Install (backend)
         working-directory: backend
         run: npm ci
 
-      - name: Generate Prisma Client
+      - name: Build (backend)
         working-directory: backend
-        run: npx prisma generate
-
-      - name: Build backend
-        working-directory: backend
-        env:
-          NODE_ENV: production
-          # variáveis só para build; a app não arranca no CI
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mts?schema=public
-          JWT_SECRET: ci-secret
-          ENABLE_SWAGGER: false
         run: npm run build
 
-      # (Opcional) Validar types sem emitir JS
-      - name: Type-check backend
+      - name: Test (backend)
         working-directory: backend
-        run: npx tsc -p tsconfig.build.json --noEmit
+        run: npm test -- --run
 
-      # ========= FRONTEND =========
-      - name: Install frontend deps
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node 20
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: UTF-8 locale
+        run: |
+          echo "LANG=en_US.UTF-8" >> $GITHUB_ENV
+          echo "LC_ALL=en_US.UTF-8" >> $GITHUB_ENV
+
+      - name: Install (frontend)
         working-directory: frontend
         run: npm ci
 
-      - name: Build frontend
+      - name: Build (frontend)
         working-directory: frontend
-        env:
-          # Se usares VITE_API_URL em produção, define aqui conforme precisares
-          VITE_API_URL: http://localhost:4000/api
         run: npm run build
 
-      # ========= ARTEFACTOS =========
-      - name: Upload backend dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-dist
-          path: backend/dist
-
-      - name: Upload frontend dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      - name: Test (frontend)
+        working-directory: frontend
+        run: npm test -- --run
 
