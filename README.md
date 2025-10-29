@@ -1,3 +1,5 @@
+![CI](https://github.com/filcris/mini-task-scheduler/actions/workflows/ci.yml/badge.svg?branch=main)
+
 # 🗓️ Mini Task Scheduler  
 > Sistema Full-Stack para gestão de tarefas com Kanban, Dashboard, modo escuro e exportação PDF.  
 > Desenvolvido por **Cristina Avelar** 🇵🇹  
